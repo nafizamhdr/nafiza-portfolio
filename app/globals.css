@@ -145,8 +145,12 @@
   .anim-math-float { animation: math-float 8s ease-in-out infinite; }
   .anim-nudge { animation: nudge 2.4s ease-in-out infinite; }
 
-  /* Smooth color transition between hero halves */
-  .hero-side-transition {
-    will-change: clip-path;
+  /* Side layer perf:
+     - `contain: layout paint` isolates layer from global recalc on split change
+     - No `will-change` — forced compositor promotion adds overhead on low-end
+       mobile GPUs. JS already throttles via rAF; inset() clip-path is
+       GPU-friendly enough without forced layer promotion. */
+  .hero-side-layer {
+    contain: layout paint;
   }
 }
