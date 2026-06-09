@@ -126,14 +126,10 @@ export function Hero() {
       const inverted = 1 - Math.max(0, Math.min(1, x));
       commitSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
     }
-    function onLeave() {
-      commitSplit(DEFAULT_SPLIT);
-    }
+    // No mouseleave handler — split persists at last position when cursor exits.
     el.addEventListener("mousemove", onMove);
-    el.addEventListener("mouseleave", onLeave);
     return () => {
       el.removeEventListener("mousemove", onMove);
-      el.removeEventListener("mouseleave", onLeave);
     };
   }, [mode, commitSplit]);
 
