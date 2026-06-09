@@ -44,8 +44,9 @@ export function Contact() {
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          style={{ willChange: "transform, opacity" }}
           className="text-center"
         >
           <div className="text-[11px] font-semibold tracking-[0.22em] uppercase mb-4 gradient-text-green-indigo">
@@ -70,8 +71,9 @@ export function Contact() {
               rel="noreferrer"
               initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.4, delay: i * 0.07 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.3, delay: i * 0.05, ease: "easeOut" }}
+              style={{ willChange: "transform, opacity" }}
               className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 hover:border-white/30 transition-all duration-300 cursor-pointer aspect-square flex flex-col items-center justify-center text-center"
             >
               {/* Color glow on hover */}

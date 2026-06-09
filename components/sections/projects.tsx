@@ -36,8 +36,9 @@ export function Projects({ projects }: { projects: Project[] }) {
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          style={{ willChange: "transform, opacity" }}
           className="text-center"
         >
           <div className="text-[11px] font-semibold tracking-[0.22em] uppercase mb-4 gradient-text-green-indigo">
@@ -69,8 +70,9 @@ function CategoryGroup({ category, items }: { category: string; items: Project[]
       <motion.div
         initial={{ opacity: 0, x: -12 }}
         whileInView={{ opacity: 1, x: 0 }}
-        viewport={{ once: true, margin: "-80px" }}
-        transition={{ duration: 0.5 }}
+        viewport={{ once: true, amount: 0.2 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        style={{ willChange: "transform, opacity" }}
         className="flex items-center gap-4 mb-8"
       >
         <span className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent" />
@@ -102,8 +104,9 @@ function ProjectCard({ project, idx }: { project: Project; idx: number }) {
     <motion.article
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-80px" }}
-      transition={{ duration: 0.5, delay: idx * 0.08 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.35, delay: idx * 0.06, ease: "easeOut" }}
+      style={{ willChange: "transform, opacity" }}
       className={cn(
         "group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] hover:border-indigo/40 transition-all duration-300",
         cardHref && "cursor-pointer"

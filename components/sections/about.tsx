@@ -16,8 +16,9 @@ export function About() {
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
+            viewport={{ once: true, amount: 0.15 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            style={{ willChange: "transform, opacity" }}
             className="lg:col-span-7"
           >
             <div className="inline-flex items-center gap-2 text-[11px] font-semibold tracking-[0.22em] uppercase mb-6">
@@ -77,8 +78,9 @@ export function About() {
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.7, delay: 0.1 }}
+            viewport={{ once: true, amount: 0.15 }}
+            transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+            style={{ willChange: "transform, opacity" }}
             className="lg:col-span-5 flex justify-center lg:justify-end"
           >
             <div className="relative">

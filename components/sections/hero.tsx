@@ -28,7 +28,6 @@ type RoleData = {
   textClass: string;
   subtitleClass: string;
   ctaClass: string;
-  bgClass: string;
 };
 
 const ROLES: { left: RoleData; right: RoleData } = {
@@ -44,7 +43,6 @@ const ROLES: { left: RoleData; right: RoleData } = {
     textClass: "text-navy",
     subtitleClass: "text-navy/70",
     ctaClass: "pill-cta-green text-white",
-    bgClass: "bg-cream",
   },
   right: {
     eyebrow: "AI & Machine Learning",
@@ -58,38 +56,30 @@ const ROLES: { left: RoleData; right: RoleData } = {
     textClass: "text-white",
     subtitleClass: "text-white/70",
     ctaClass: "pill-cta-indigo text-white",
-    bgClass: "bg-background",
   },
 };
 
 export function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
-  const dividerRef = useRef<HTMLDivElement>(null);
   const splitRef = useRef(DEFAULT_SPLIT);
+  const lastAppliedRef = useRef(DEFAULT_SPLIT);
   const rafRef = useRef(0);
   const dominantRef = useRef(true);
 
   const [mode, setMode] = useState<Mode>("unknown");
-  // Only re-renders when the dominant side flips — used for hint text color & permission button
   const [leftDominant, setLeftDominant] = useState(true);
 
   /**
-   * Imperative split update — writes directly to DOM CSS variable.
-   * Coalesced via rAF so multiple gyro events per frame become one paint.
-   * React only re-renders when the dominant side crosses 50.
-   * Quantized to 0.25% to skip jitter-level updates that would still trigger
-   * style recalc but produce no visible change.
+   * Imperative split update — write --split CSS variable directly to DOM.
+   * Quantized 0.25% + rAF coalesced. React state only flips on dominant cross.
    */
-  const lastAppliedRef = useRef(DEFAULT_SPLIT);
   const commitSplit = useCallback((value: number) => {
-    // Quantize to 0.25% increments — reduces paint frequency
     const q = Math.round(value * 4) / 4;
     splitRef.current = q;
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0;
       const s = splitRef.current;
-      // Skip if value didn't actually change (jitter under 0.25%)
       if (s === lastAppliedRef.current) return;
       lastAppliedRef.current = s;
       const sec = sectionRef.current;
@@ -120,12 +110,11 @@ export function Hero() {
     setMode(needsPermission ? "gyro-pending" : "gyro-active");
   }, []);
 
-  // ---- Mouse (desktop) ----
+  // ---- Mouse ----
   useEffect(() => {
     if (mode !== "desktop") return;
     const el = sectionRef.current;
     if (!el) return;
-
     function onMove(e: MouseEvent) {
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -133,27 +122,18 @@ export function Hero() {
       const inverted = 1 - Math.max(0, Math.min(1, x));
       commitSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
     }
-    // No mouseleave handler — split persists at last position when cursor exits.
     el.addEventListener("mousemove", onMove);
-    return () => {
-      el.removeEventListener("mousemove", onMove);
-    };
+    return () => el.removeEventListener("mousemove", onMove);
   }, [mode, commitSplit]);
 
-  // ---- Gyroscope ----
+  // ---- Gyroscope (with low-pass smoothing) ----
   useEffect(() => {
     if (mode !== "gyro-active") return;
-
-    // Low-pass filter — gyro sensors are noisy; raw values jitter ±1° even
-    // when phone is still. Exponential smoothing buys ~1-frame delay (~16ms)
-    // in exchange for 5x less paint thrash.
     const ALPHA = 0.25;
     let smoothed = splitRef.current;
-
     function onOrientation(e: DeviceOrientationEvent) {
       const gamma = e.gamma;
       if (gamma == null) return;
-
       let norm: number;
       if (Math.abs(gamma) < GYRO_DEADZONE) {
         norm = 0.5;
@@ -168,7 +148,6 @@ export function Hero() {
       smoothed = smoothed + (target - smoothed) * ALPHA;
       commitSplit(smoothed);
     }
-
     window.addEventListener("deviceorientation", onOrientation);
     return () => window.removeEventListener("deviceorientation", onOrientation);
   }, [mode, commitSplit]);
@@ -176,17 +155,14 @@ export function Hero() {
   // ---- Auto-rotate fallback ----
   useEffect(() => {
     if (mode !== "auto-rotate") return;
-
     const targets = [30, 70];
     let i = 0;
     let raf = 0;
     let target = targets[i];
-
     const interval = window.setInterval(() => {
       i = (i + 1) % targets.length;
       target = targets[i];
     }, AUTO_ROTATE_INTERVAL_MS);
-
     function tick() {
       const prev = splitRef.current;
       const next = Math.abs(prev - target) < 0.05 ? target : prev + (target - prev) * 0.06;
@@ -194,21 +170,16 @@ export function Hero() {
       raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);
-
     return () => {
       clearInterval(interval);
       cancelAnimationFrame(raf);
     };
   }, [mode, commitSplit]);
 
-  // Cleanup any pending rAF on unmount
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // iOS permission
   const requestGyroPermission = useCallback(async () => {
     try {
       // @ts-expect-error — non-standard iOS API
@@ -223,17 +194,43 @@ export function Hero() {
     <section
       id="home"
       ref={sectionRef}
-      className="relative min-h-[100svh] overflow-hidden select-none"
-      // Initial value only — runtime updates are imperative via commitSplit
+      className="relative min-h-[100svh] overflow-hidden select-none hero-bg"
       style={{ ["--split" as string]: `${DEFAULT_SPLIT}%` }}
       aria-label="Hero — interactive split between Fullstack Dev and ML Engineer"
     >
-      <SideLayer role={ROLES.left} position="left" />
-      <SideLayer role={ROLES.right} position="right" />
+      {/* Mobile-only floating particles (hidden md+) */}
+      <MobileParticles />
+
+      {/* Decorations clipped per side — DESKTOP only */}
+      <div
+        className="absolute inset-0 hero-side-layer hidden md:block"
+        style={{ clipPath: "inset(0 calc(100% - var(--split)) 0 0)" }}
+      >
+        <CreamDecorations />
+      </div>
+      <div
+        className="absolute inset-0 hero-side-layer hidden md:block"
+        style={{ clipPath: "inset(0 0 0 var(--split))" }}
+      >
+        <NavyDecorations />
+      </div>
+
+      {/* Content layers clipped per side */}
+      <div
+        className="absolute inset-0 hero-side-layer"
+        style={{ clipPath: "inset(0 calc(100% - var(--split)) 0 0)" }}
+      >
+        <SideContent role={ROLES.left} />
+      </div>
+      <div
+        className="absolute inset-0 hero-side-layer"
+        style={{ clipPath: "inset(0 0 0 var(--split))" }}
+      >
+        <SideContent role={ROLES.right} />
+      </div>
 
       {/* Center divider */}
       <div
-        ref={dividerRef}
         className="absolute top-16 bottom-24 sm:bottom-20 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent pointer-events-none"
         style={{ left: `var(--split)`, transform: "translateX(-50%)" }}
       />
@@ -278,86 +275,114 @@ export function Hero() {
 }
 
 /**
- * SideLayer is memoized so decorations don't re-render when the parent's
- * `leftDominant` state flips. Props are stable references, so the memo holds.
+ * SideContent — text/CTA cluster. No background fill (handled by section gradient).
  */
-const SideLayer = memo(function SideLayer({
-  role,
-  position,
-}: {
-  role: RoleData;
-  position: "left" | "right";
-}) {
-  // inset() is GPU-cheaper than polygon() — browsers can use a fast-path
-  // rectangle clip instead of a generic path. Same visual result.
-  const clipPath =
-    position === "left"
-      ? "inset(0 calc(100% - var(--split)) 0 0)"
-      : "inset(0 0 0 var(--split))";
-
+const SideContent = memo(function SideContent({ role }: { role: RoleData }) {
   return (
-    <div className="absolute inset-0 hero-side-layer" style={{ clipPath }}>
-      <div className={cn("absolute inset-0", role.bgClass)} />
-
-      {position === "left" ? <CreamDecorations /> : <NavyDecorations />}
-
-      <div className="absolute inset-0 pt-16 pb-24 sm:pb-20 flex items-center justify-center px-5 sm:px-6">
-        <div className="w-full max-w-4xl flex flex-col items-center text-center">
-          <div
-            className={cn(
-              "inline-flex items-center gap-2 text-[10px] sm:text-xs font-semibold tracking-[0.2em] sm:tracking-[0.22em] uppercase mb-4 sm:mb-6",
-              role.accentClass
-            )}
-          >
-            <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-            {role.eyebrow}
-          </div>
-
-          <h1
-            className={cn(
-              "font-display font-black uppercase tracking-[-0.02em] leading-[0.95] whitespace-nowrap",
-              "text-[clamp(1.875rem,9vw,5.5rem)]",
-              role.textClass
-            )}
-          >
-            {role.title}
-          </h1>
-
-          <p
-            className={cn(
-              "mt-4 sm:mt-6 text-[13px] sm:text-base md:text-lg max-w-md sm:max-w-xl text-balance leading-relaxed",
-              role.subtitleClass
-            )}
-          >
-            {role.subtitle.map((line, i) => (
-              <span key={i} className="block">
-                {line}
-              </span>
-            ))}
-          </p>
-
-          <a
-            href="#projects"
-            className={cn(
-              "mt-6 sm:mt-8 inline-flex items-center gap-2 h-10 sm:h-11 px-6 sm:px-7 rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase cursor-pointer transition-transform hover:scale-[1.03]",
-              role.ctaClass
-            )}
-            aria-label={role.ctaLabel}
-          >
-            {role.ctaLabel}
-            <ArrowRight className="h-4 w-4" />
-          </a>
+    <div className="absolute inset-0 pt-16 pb-24 sm:pb-20 flex items-center justify-center px-5 sm:px-6">
+      <div className="w-full max-w-4xl flex flex-col items-center text-center">
+        <div
+          className={cn(
+            "inline-flex items-center gap-2 text-[10px] sm:text-xs font-semibold tracking-[0.2em] sm:tracking-[0.22em] uppercase mb-4 sm:mb-6",
+            role.accentClass
+          )}
+        >
+          <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+          {role.eyebrow}
         </div>
+
+        <h1
+          className={cn(
+            "font-display font-black uppercase tracking-[-0.02em] leading-[0.95] whitespace-nowrap",
+            "text-[clamp(1.875rem,9vw,5.5rem)]",
+            role.textClass
+          )}
+        >
+          {role.title}
+        </h1>
+
+        <p
+          className={cn(
+            "mt-4 sm:mt-6 text-[13px] sm:text-base md:text-lg max-w-md sm:max-w-xl text-balance leading-relaxed",
+            role.subtitleClass
+          )}
+        >
+          {role.subtitle.map((line, i) => (
+            <span key={i} className="block">
+              {line}
+            </span>
+          ))}
+        </p>
+
+        <a
+          href="#projects"
+          className={cn(
+            "mt-6 sm:mt-8 inline-flex items-center gap-2 h-10 sm:h-11 px-6 sm:px-7 rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase cursor-pointer transition-transform hover:scale-[1.03]",
+            role.ctaClass
+          )}
+          aria-label={role.ctaLabel}
+        >
+          {role.ctaLabel}
+          <ArrowRight className="h-4 w-4" />
+        </a>
       </div>
     </div>
   );
 });
 
-/* === Decorations (also memoized — pure components, no props) === */
+/* === Mobile particles (md:hidden) — lightweight CSS-animated dots === */
+const MOBILE_PARTICLES = [
+  { x: 12, y: 15, size: 3, color: "indigo", delay: 0, anim: "drift" },
+  { x: 88, y: 22, size: 2, color: "indigo", delay: 1, anim: "float-y" },
+  { x: 25, y: 35, size: 4, color: "navy", delay: 2, anim: "float-y" },
+  { x: 78, y: 42, size: 2, color: "indigo", delay: 3, anim: "drift" },
+  { x: 8, y: 50, size: 3, color: "navy", delay: 0.5, anim: "float-x" },
+  { x: 92, y: 55, size: 3, color: "indigo", delay: 1.5, anim: "drift" },
+  { x: 18, y: 68, size: 2, color: "navy", delay: 2.5, anim: "float-y" },
+  { x: 82, y: 72, size: 4, color: "indigo", delay: 0.8, anim: "drift" },
+  { x: 35, y: 82, size: 2, color: "indigo", delay: 1.8, anim: "float-x" },
+  { x: 65, y: 88, size: 3, color: "navy", delay: 2.8, anim: "float-y" },
+  { x: 45, y: 28, size: 2, color: "indigo", delay: 3.5, anim: "drift" },
+  { x: 55, y: 60, size: 2, color: "navy", delay: 4, anim: "float-x" },
+] as const;
+
+const MobileParticles = memo(function MobileParticles() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none md:hidden">
+      {MOBILE_PARTICLES.map((p, i) => (
+        <span
+          key={i}
+          className={cn(
+            "absolute rounded-full",
+            p.color === "indigo" ? "bg-indigo-soft/35" : "bg-navy/30",
+            p.anim === "drift" && "anim-drift",
+            p.anim === "float-y" && "anim-float-y",
+            p.anim === "float-x" && "anim-float-x"
+          )}
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            animationDelay: `${p.delay}s`,
+          }}
+        />
+      ))}
+      {/* A few faint connecting lines for "neural" hint */}
+      <svg className="absolute inset-0 w-full h-full opacity-30">
+        <line x1="12%" y1="15%" x2="25%" y2="35%" stroke="#6366F1" strokeWidth="0.5" className="anim-flicker" />
+        <line x1="78%" y1="42%" x2="92%" y2="55%" stroke="#6366F1" strokeWidth="0.5" className="anim-flicker" style={{ animationDelay: "1s" }} />
+        <line x1="35%" y1="82%" x2="65%" y2="88%" stroke="#6366F1" strokeWidth="0.5" className="anim-flicker" style={{ animationDelay: "2s" }} />
+      </svg>
+    </div>
+  );
+});
+
+/* === Desktop decorations === */
 
 const CreamDecorations = memo(function CreamDecorations() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none hidden md:block">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
       <div className="absolute left-[6%] top-[18%] anim-float-y">
         <div className="px-5 py-4 rounded-2xl border border-navy/10 bg-white/40 backdrop-blur-sm shadow-sm font-mono text-navy/60">
           <div className="text-xs">
@@ -404,7 +429,7 @@ const CreamDecorations = memo(function CreamDecorations() {
 
 const NavyDecorations = memo(function NavyDecorations() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none hidden md:block">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
       <div className="absolute right-[6%] top-[14%] anim-float-y">
         <NeuralNet />
       </div>

@@ -53,8 +53,9 @@ export function Skills() {
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          style={{ willChange: "transform, opacity" }}
           className="text-center"
         >
           <div className="text-[11px] font-semibold tracking-[0.22em] uppercase mb-4 gradient-text-green-indigo">
@@ -74,8 +75,9 @@ export function Skills() {
               key={s.name}
               initial={{ opacity: 0, y: 12 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.4, delay: i * 0.04 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.3, delay: i * 0.03, ease: "easeOut" }}
+              style={{ willChange: "transform, opacity" }}
               className="group flex flex-col items-center gap-3 cursor-default"
             >
               <div

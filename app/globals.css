@@ -148,9 +148,32 @@
   /* Side layer perf:
      - `contain: layout paint` isolates layer from global recalc on split change
      - No `will-change` — forced compositor promotion adds overhead on low-end
-       mobile GPUs. JS already throttles via rAF; inset() clip-path is
-       GPU-friendly enough without forced layer promotion. */
+       mobile GPUs. JS already throttles via rAF. */
   .hero-side-layer {
     contain: layout paint;
+  }
+
+  /* Hero section background — single gradient with hard stop at --split.
+     Replaces two full-screen color-filled divs (one per side). Now there's
+     ONE paint operation per --split update instead of two clipped layers. */
+  .hero-bg {
+    background:
+      linear-gradient(
+        to right,
+        hsl(var(--cream)) 0,
+        hsl(var(--cream)) var(--split, 50%),
+        hsl(var(--background)) var(--split, 50%),
+        hsl(var(--background)) 100%
+      );
+  }
+
+  /* Force GPU layer + hint browser for entry animations.
+     Used by Framer Motion `whileInView` containers — prevents flicker after
+     animation completes on mobile by keeping element on its own compositor
+     layer rather than re-merging into root. */
+  .anim-entry-layer {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
 }
