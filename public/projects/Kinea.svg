@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500" role="img" aria-label="Kinea — AI motion design extension for Adobe After Effects">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F1729"/>
+      <stop offset="50%" stop-color="#1B2A4E"/>
+      <stop offset="100%" stop-color="#0F1729"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" fill="url(#bg)"/>
+  <ellipse cx="400" cy="250" rx="350" ry="200" fill="url(#glow)"/>
+
+  <!-- Subtle dot grid -->
+  <g fill="#6366F1" fill-opacity="0.18">
+    <circle cx="80" cy="60" r="1.5"/>
+    <circle cx="160" cy="60" r="1.5"/>
+    <circle cx="240" cy="60" r="1.5"/>
+    <circle cx="320" cy="60" r="1.5"/>
+    <circle cx="80" cy="120" r="1.5"/>
+    <circle cx="80" cy="180" r="1.5"/>
+    <circle cx="720" cy="380" r="1.5"/>
+    <circle cx="720" cy="440" r="1.5"/>
+    <circle cx="640" cy="440" r="1.5"/>
+    <circle cx="560" cy="440" r="1.5"/>
+  </g>
+
+  <!-- Motion waveform — multiple curves representing keyframe paths -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 60 350 Q 200 250 340 320 T 600 280 T 740 200" stroke="#6366F1" stroke-width="2.5" stroke-opacity="0.6"/>
+    <path d="M 60 380 Q 200 300 340 360 T 600 320 T 740 260" stroke="#818CF8" stroke-width="2" stroke-opacity="0.4"/>
+    <path d="M 60 410 Q 200 350 340 400 T 600 360 T 740 320" stroke="#6366F1" stroke-width="1.5" stroke-opacity="0.25"/>
+  </g>
+
+  <!-- Keyframe diamonds along the main curve -->
+  <g fill="#6366F1">
+    <g transform="translate(60 350) rotate(45)"><rect x="-6" y="-6" width="12" height="12" rx="1"/></g>
+    <g transform="translate(200 290) rotate(45)"><rect x="-6" y="-6" width="12" height="12" rx="1"/></g>
+    <g transform="translate(340 320) rotate(45)"><rect x="-6" y="-6" width="12" height="12" rx="1"/></g>
+    <g transform="translate(480 290) rotate(45)"><rect x="-6" y="-6" width="12" height="12" rx="1"/></g>
+    <g transform="translate(600 280) rotate(45)"><rect x="-6" y="-6" width="12" height="12" rx="1"/></g>
+    <g transform="translate(740 200) rotate(45)"><rect x="-6" y="-6" width="12" height="12" rx="1"/></g>
+  </g>
+
+  <!-- AI Sparkle -->
+  <g transform="translate(640 110)" fill="#818CF8">
+    <path d="M 0 -22 L 5 -5 L 22 0 L 5 5 L 0 22 L -5 5 L -22 0 L -5 -5 Z"/>
+    <circle cx="35" cy="-15" r="3"/>
+    <circle cx="40" cy="20" r="2"/>
+    <circle cx="-30" cy="25" r="2"/>
+  </g>
+
+  <!-- Adobe AE-style mark -->
+  <g transform="translate(60 80)">
+    <rect width="46" height="46" rx="10" fill="#6366F1" fill-opacity="0.15" stroke="#6366F1" stroke-opacity="0.4" stroke-width="1.5"/>
+    <text x="23" y="32" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="900" fill="#818CF8" text-anchor="middle">Ae</text>
+  </g>
+
+  <!-- Title -->
+  <text x="400" y="220" font-family="Inter, system-ui, sans-serif" font-size="96" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="-2">KINEA</text>
+  <text x="400" y="260" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="600" fill="#818CF8" text-anchor="middle" letter-spacing="6">AI MOTION DESIGN COPILOT</text>
+
+  <!-- Status pill -->
+  <g transform="translate(330 290)">
+    <rect width="140" height="28" rx="14" fill="#6366F1" fill-opacity="0.12" stroke="#6366F1" stroke-opacity="0.35" stroke-width="1"/>
+    <circle cx="14" cy="14" r="3" fill="#10B981"/>
+    <text x="78" y="18" font-family="ui-monospace, monospace" font-size="10" font-weight="600" fill="#FFFFFF" text-anchor="middle" letter-spacing="2">CEP EXTENSION</text>
+  </g>
+</svg>

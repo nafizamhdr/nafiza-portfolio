@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* === Reference palette: cream + navy + green + indigo === */
+    --background: 222 39% 11%;          /* #0F1729 deep navy */
+    --background-soft: 230 28% 17%;     /* #1B1F3A */
+    --foreground: 0 0% 100%;            /* white */
+    --muted: 224 30% 18%;
+    --muted-foreground: 215 20% 65%;    /* slate-400 */
+    --card: 224 31% 14%;                /* slightly elevated */
+    --card-foreground: 0 0% 100%;
+    --border: 224 25% 22%;
+    --input: 224 25% 22%;
+    --ring: 244 84% 67%;                /* indigo */
+
+    /* Brand sides */
+    --cream: 36 56% 89%;                /* #F5E6D3 */
+    --cream-foreground: 224 30% 14%;
+    --navy: 222 39% 11%;
+    --green: 154 100% 36%;              /* #00B86B */
+    --green-soft: 154 60% 50%;
+    --indigo: 244 84% 67%;              /* #6366F1 */
+    --indigo-soft: 244 70% 75%;
+
+    --radius: 9999px;                   /* heavy use of pill shapes */
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01" 1, "cv11" 1;
+  }
+
+  ::selection {
+    background: hsl(var(--indigo) / 0.4);
+    color: white;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .container-tight {
+    @apply mx-auto w-full max-w-6xl px-6;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Gradient text helpers */
+  .gradient-text-indigo {
+    background: linear-gradient(120deg, #fff 0%, #94A3B8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .gradient-text-cream {
+    background: linear-gradient(120deg, hsl(var(--navy)) 0%, hsl(var(--navy) / 0.4) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .gradient-text-green-indigo {
+    background: linear-gradient(90deg, #00B86B 0%, #6366F1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .pill-cta-green {
+    background: linear-gradient(90deg, #00B86B 0%, #00D27A 100%);
+    box-shadow: 0 8px 24px -8px rgba(0, 184, 107, 0.6);
+  }
+  .pill-cta-indigo {
+    background: linear-gradient(90deg, #6366F1 0%, #818CF8 100%);
+    box-shadow: 0 8px 24px -8px rgba(99, 102, 241, 0.6);
+  }
+
+  /* Continuous particle / decoration animations */
+  @keyframes float-y {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+  @keyframes float-x {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(8px); }
+  }
+  @keyframes drift {
+    0% { transform: translate(0, 0); }
+    33% { transform: translate(10px, -8px); }
+    66% { transform: translate(-6px, 10px); }
+    100% { transform: translate(0, 0); }
+  }
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
+  }
+  @keyframes flicker {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.5; }
+  }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes draw-line {
+    from { stroke-dashoffset: 200; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes bar-grow {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(0.85); }
+  }
+  @keyframes math-float {
+    0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.08; }
+    50% { transform: translateY(-15px) rotate(5deg); opacity: 0.14; }
+  }
+  @keyframes nudge {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(200%); }
+  }
+
+  .anim-float-y { animation: float-y 6s ease-in-out infinite; }
+  .anim-float-x { animation: float-x 7s ease-in-out infinite; }
+  .anim-drift { animation: drift 10s ease-in-out infinite; }
+  .anim-pulse-soft { animation: pulse-soft 3s ease-in-out infinite; }
+  .anim-flicker { animation: flicker 2.5s ease-in-out infinite; }
+  .anim-spin-slow { animation: spin-slow 30s linear infinite; }
+  .anim-bar-grow { animation: bar-grow 2s ease-in-out infinite; }
+  .anim-math-float { animation: math-float 8s ease-in-out infinite; }
+  .anim-nudge { animation: nudge 2.4s ease-in-out infinite; }
+
+  /* Smooth color transition between hero halves */
+  .hero-side-transition {
+    will-change: clip-path;
+  }
+}
