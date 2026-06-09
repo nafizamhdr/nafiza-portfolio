@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Smartphone, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,11 +13,11 @@ const AUTO_ROTATE_INTERVAL_MS = 4000;
 
 type Mode =
   | "unknown"
-  | "desktop" // mouse-controlled
-  | "gyro-pending" // iOS, awaiting permission
-  | "gyro-active" // gyro listener attached
-  | "auto-rotate" // no gyro / permission denied — auto cycle
-  | "static"; // ultimate fallback
+  | "desktop"
+  | "gyro-pending"
+  | "gyro-active"
+  | "auto-rotate"
+  | "static";
 
 type RoleData = {
   eyebrow: string;
@@ -63,29 +63,51 @@ const ROLES: { left: RoleData; right: RoleData } = {
 };
 
 export function Hero() {
-  const ref = useRef<HTMLElement>(null);
-  const [split, setSplit] = useState(DEFAULT_SPLIT);
-  const [mode, setMode] = useState<Mode>("unknown");
-  const splitRef = useRef(split);
-  splitRef.current = split;
+  const sectionRef = useRef<HTMLElement>(null);
+  const dividerRef = useRef<HTMLDivElement>(null);
+  const splitRef = useRef(DEFAULT_SPLIT);
+  const rafRef = useRef(0);
+  const dominantRef = useRef(true);
 
-  // ---- Mode detection on mount ----
+  const [mode, setMode] = useState<Mode>("unknown");
+  // Only re-renders when the dominant side flips — used for hint text color & permission button
+  const [leftDominant, setLeftDominant] = useState(true);
+
+  /**
+   * Imperative split update — writes directly to DOM CSS variable.
+   * Coalesced via rAF so multiple gyro events per frame become one paint.
+   * React only re-renders when the dominant side crosses 50.
+   */
+  const commitSplit = useCallback((value: number) => {
+    splitRef.current = value;
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      const s = splitRef.current;
+      const sec = sectionRef.current;
+      if (sec) sec.style.setProperty("--split", `${s}%`);
+      // Mirror to divider too (it uses --split via inline style; setProperty covers it via cascade)
+      const dom = s >= 50;
+      if (dom !== dominantRef.current) {
+        dominantRef.current = dom;
+        setLeftDominant(dom);
+      }
+    });
+  }, []);
+
+  // ---- Mode detection ----
   useEffect(() => {
     if (typeof window === "undefined") return;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
-
     if (!coarse) {
       setMode("desktop");
       return;
     }
-
     const orientationAvailable = typeof window.DeviceOrientationEvent !== "undefined";
     if (!orientationAvailable) {
       setMode("auto-rotate");
       return;
     }
-
-    // iOS 13+ requires explicit permission via user gesture
     // @ts-expect-error — non-standard iOS API
     const needsPermission = typeof DeviceOrientationEvent.requestPermission === "function";
     setMode(needsPermission ? "gyro-pending" : "gyro-active");
@@ -94,22 +116,18 @@ export function Hero() {
   // ---- Mouse (desktop) ----
   useEffect(() => {
     if (mode !== "desktop") return;
-    const el = ref.current;
+    const el = sectionRef.current;
     if (!el) return;
 
-    function setSplitFromClientX(clientX: number) {
+    function onMove(e: MouseEvent) {
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const x = (clientX - rect.left) / rect.width;
-      // Inverted: mouse right -> cream side bigger (split smaller)
+      const x = (e.clientX - rect.left) / rect.width;
       const inverted = 1 - Math.max(0, Math.min(1, x));
-      setSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
-    }
-    function onMove(e: MouseEvent) {
-      setSplitFromClientX(e.clientX);
+      commitSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
     }
     function onLeave() {
-      setSplit(DEFAULT_SPLIT);
+      commitSplit(DEFAULT_SPLIT);
     }
     el.addEventListener("mousemove", onMove);
     el.addEventListener("mouseleave", onLeave);
@@ -117,14 +135,14 @@ export function Hero() {
       el.removeEventListener("mousemove", onMove);
       el.removeEventListener("mouseleave", onLeave);
     };
-  }, [mode]);
+  }, [mode, commitSplit]);
 
-  // ---- Gyroscope (mobile, granted) ----
+  // ---- Gyroscope ----
   useEffect(() => {
     if (mode !== "gyro-active") return;
 
     function onOrientation(e: DeviceOrientationEvent) {
-      const gamma = e.gamma; // left-right tilt, -90..90
+      const gamma = e.gamma;
       if (gamma == null) return;
 
       let norm: number;
@@ -134,16 +152,15 @@ export function Hero() {
         const sign = Math.sign(gamma);
         const abs = Math.min(Math.abs(gamma), GYRO_MAX_TILT);
         const t = (abs - GYRO_DEADZONE) / (GYRO_MAX_TILT - GYRO_DEADZONE);
-        norm = 0.5 + sign * t * 0.5; // 0..1
+        norm = 0.5 + sign * t * 0.5;
       }
-      // Inverted to match mouse: tilt right -> cream side grows
       const inverted = 1 - norm;
-      setSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
+      commitSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
     }
 
     window.addEventListener("deviceorientation", onOrientation);
     return () => window.removeEventListener("deviceorientation", onOrientation);
-  }, [mode]);
+  }, [mode, commitSplit]);
 
   // ---- Auto-rotate fallback ----
   useEffect(() => {
@@ -160,10 +177,9 @@ export function Hero() {
     }, AUTO_ROTATE_INTERVAL_MS);
 
     function tick() {
-      setSplit((prev) => {
-        const next = prev + (target - prev) * 0.06;
-        return Math.abs(next - target) < 0.05 ? target : next;
-      });
+      const prev = splitRef.current;
+      const next = Math.abs(prev - target) < 0.05 ? target : prev + (target - prev) * 0.06;
+      commitSplit(next);
       raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);
@@ -172,51 +188,46 @@ export function Hero() {
       clearInterval(interval);
       cancelAnimationFrame(raf);
     };
-  }, [mode]);
+  }, [mode, commitSplit]);
 
-  // ---- iOS permission request ----
+  // Cleanup any pending rAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  // iOS permission
   const requestGyroPermission = useCallback(async () => {
     try {
       // @ts-expect-error — non-standard iOS API
       const res = await DeviceOrientationEvent.requestPermission();
-      if (res === "granted") {
-        setMode("gyro-active");
-      } else {
-        setMode("auto-rotate");
-      }
+      setMode(res === "granted" ? "gyro-active" : "auto-rotate");
     } catch {
       setMode("auto-rotate");
     }
   }, []);
 
-  const leftDominant = split >= 50;
-
   return (
     <section
       id="home"
-      ref={ref}
+      ref={sectionRef}
       className="relative min-h-[100svh] overflow-hidden select-none"
-      style={{ ["--split" as string]: `${split}%` }}
+      // Initial value only — runtime updates are imperative via commitSplit
+      style={{ ["--split" as string]: `${DEFAULT_SPLIT}%` }}
       aria-label="Hero — interactive split between Fullstack Dev and ML Engineer"
     >
-      <SideLayer
-        role={ROLES.left}
-        clipPath={`polygon(0 0, var(--split) 0, var(--split) 100%, 0 100%)`}
-        position="left"
-      />
-      <SideLayer
-        role={ROLES.right}
-        clipPath={`polygon(var(--split) 0, 100% 0, 100% 100%, var(--split) 100%)`}
-        position="right"
-      />
+      <SideLayer role={ROLES.left} position="left" />
+      <SideLayer role={ROLES.right} position="right" />
 
       {/* Center divider */}
       <div
+        ref={dividerRef}
         className="absolute top-16 bottom-24 sm:bottom-20 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent pointer-events-none"
         style={{ left: `var(--split)`, transform: "translateX(-50%)" }}
       />
 
-      {/* Bottom hint + iOS permission button */}
+      {/* Bottom hint */}
       <div
         className={cn(
           "absolute bottom-5 inset-x-0 flex items-center justify-center gap-2 text-[10px] tracking-[0.24em] font-medium uppercase transition-colors duration-500 z-20",
@@ -246,7 +257,6 @@ export function Hero() {
               {mode === "gyro-active" && "Tilt your phone"}
               {mode === "auto-rotate" && "Auto-switching"}
               {mode === "static" && "—"}
-              {mode === "unknown" && ""}
             </span>
             <span className="h-px w-6 sm:w-8 bg-current opacity-50" />
           </div>
@@ -256,22 +266,28 @@ export function Hero() {
   );
 }
 
-function SideLayer({
+/**
+ * SideLayer is memoized so decorations don't re-render when the parent's
+ * `leftDominant` state flips. Props are stable references, so the memo holds.
+ */
+const SideLayer = memo(function SideLayer({
   role,
-  clipPath,
   position,
 }: {
   role: RoleData;
-  clipPath: string;
   position: "left" | "right";
 }) {
+  const clipPath =
+    position === "left"
+      ? "polygon(0 0, var(--split) 0, var(--split) 100%, 0 100%)"
+      : "polygon(var(--split) 0, 100% 0, 100% 100%, var(--split) 100%)";
+
   return (
     <div className="absolute inset-0 hero-side-transition" style={{ clipPath }}>
       <div className={cn("absolute inset-0", role.bgClass)} />
 
       {position === "left" ? <CreamDecorations /> : <NavyDecorations />}
 
-      {/* Centered content — pt-16 navbar offset, pb-24 hint area => true visual center */}
       <div className="absolute inset-0 pt-16 pb-24 sm:pb-20 flex items-center justify-center px-5 sm:px-6">
         <div className="w-full max-w-4xl flex flex-col items-center text-center">
           <div
@@ -322,10 +338,11 @@ function SideLayer({
       </div>
     </div>
   );
-}
+});
 
-/* === Cream side decorations (Full Stack) === */
-function CreamDecorations() {
+/* === Decorations (also memoized — pure components, no props) === */
+
+const CreamDecorations = memo(function CreamDecorations() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none hidden md:block">
       <div className="absolute left-[6%] top-[18%] anim-float-y">
@@ -370,10 +387,9 @@ function CreamDecorations() {
       </div>
     </div>
   );
-}
+});
 
-/* === Navy side decorations (ML Engineer) === */
-function NavyDecorations() {
+const NavyDecorations = memo(function NavyDecorations() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none hidden md:block">
       <div className="absolute right-[6%] top-[14%] anim-float-y">
@@ -396,7 +412,7 @@ function NavyDecorations() {
       <div className="absolute right-[22%] bottom-[30%] anim-math-float text-white/15 font-display text-3xl" style={{ animationDelay: "2s" }}>∇</div>
     </div>
   );
-}
+});
 
 function NeuralNet() {
   return (
