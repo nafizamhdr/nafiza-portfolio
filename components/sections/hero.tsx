@@ -1,12 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, Smartphone, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MIN_SPLIT = 5;
 const MAX_SPLIT = 95;
 const DEFAULT_SPLIT = 50;
+const GYRO_MAX_TILT = 25;
+const GYRO_DEADZONE = 3;
+const AUTO_ROTATE_INTERVAL_MS = 4000;
+
+type Mode =
+  | "unknown"
+  | "desktop" // mouse-controlled
+  | "gyro-pending" // iOS, awaiting permission
+  | "gyro-active" // gyro listener attached
+  | "auto-rotate" // no gyro / permission denied — auto cycle
+  | "static"; // ultimate fallback
 
 type RoleData = {
   eyebrow: string;
@@ -18,7 +29,6 @@ type RoleData = {
   subtitleClass: string;
   ctaClass: string;
   bgClass: string;
-  navAccent: string;
 };
 
 const ROLES: { left: RoleData; right: RoleData } = {
@@ -35,7 +45,6 @@ const ROLES: { left: RoleData; right: RoleData } = {
     subtitleClass: "text-navy/70",
     ctaClass: "pill-cta-green text-white",
     bgClass: "bg-cream",
-    navAccent: "text-green",
   },
   right: {
     eyebrow: "AI & Machine Learning",
@@ -50,130 +59,199 @@ const ROLES: { left: RoleData; right: RoleData } = {
     subtitleClass: "text-white/70",
     ctaClass: "pill-cta-indigo text-white",
     bgClass: "bg-background",
-    navAccent: "text-indigo-soft",
   },
 };
 
 export function Hero() {
   const ref = useRef<HTMLElement>(null);
-  const [leftDominant, setLeftDominant] = useState(true);
-  const [hasInteraction, setHasInteraction] = useState(false);
+  const [split, setSplit] = useState(DEFAULT_SPLIT);
+  const [mode, setMode] = useState<Mode>("unknown");
+  const splitRef = useRef(split);
+  splitRef.current = split;
 
-  /* Refs for rAF-driven lerp — no React re-renders per frame */
-  const targetSplit = useRef(DEFAULT_SPLIT);
-  const currentSplit = useRef(DEFAULT_SPLIT);
-  const rafId = useRef<number>(0);
-  const hasInteractedRef = useRef(false);
-
+  // ---- Mode detection on mount ----
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+
+    if (!coarse) {
+      setMode("desktop");
+      return;
+    }
+
+    const orientationAvailable = typeof window.DeviceOrientationEvent !== "undefined";
+    if (!orientationAvailable) {
+      setMode("auto-rotate");
+      return;
+    }
+
+    // iOS 13+ requires explicit permission via user gesture
+    // @ts-expect-error — non-standard iOS API
+    const needsPermission = typeof DeviceOrientationEvent.requestPermission === "function";
+    setMode(needsPermission ? "gyro-pending" : "gyro-active");
+  }, []);
+
+  // ---- Mouse (desktop) ----
+  useEffect(() => {
+    if (mode !== "desktop") return;
     const el = ref.current;
     if (!el) return;
 
-    let running = true;
-    const LERP_FACTOR = 0.08; // ≈0.6s to settle (smooth exponential decay)
-
-    function animate() {
-      if (!running) return;
-
-      const prev = currentSplit.current;
-      currentSplit.current += (targetSplit.current - currentSplit.current) * LERP_FACTOR;
-
-      // Update CSS variable directly on the DOM — no React re-render
-      el!.style.setProperty("--split", `${currentSplit.current}%`);
-
-      // Only trigger React re-render when crossing 50% boundary
-      const wasLeft = prev >= 50;
-      const isLeft = currentSplit.current >= 50;
-      if (wasLeft !== isLeft) {
-        setLeftDominant(isLeft);
-      }
-
-      rafId.current = requestAnimationFrame(animate);
-    }
-
-    rafId.current = requestAnimationFrame(animate);
-
-    function setTargetFromClientX(clientX: number) {
-      const rect = el!.getBoundingClientRect();
+    function setSplitFromClientX(clientX: number) {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
       const x = (clientX - rect.left) / rect.width;
+      // Inverted: mouse right -> cream side bigger (split smaller)
       const inverted = 1 - Math.max(0, Math.min(1, x));
-      targetSplit.current = MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT);
-      if (!hasInteractedRef.current) {
-        hasInteractedRef.current = true;
-        setHasInteraction(true);
-      }
+      setSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
     }
-
     function onMove(e: MouseEvent) {
-      setTargetFromClientX(e.clientX);
+      setSplitFromClientX(e.clientX);
     }
-    function onTouch(e: TouchEvent) {
-      if (e.touches[0]) setTargetFromClientX(e.touches[0].clientX);
+    function onLeave() {
+      setSplit(DEFAULT_SPLIT);
+    }
+    el.addEventListener("mousemove", onMove);
+    el.addEventListener("mouseleave", onLeave);
+    return () => {
+      el.removeEventListener("mousemove", onMove);
+      el.removeEventListener("mouseleave", onLeave);
+    };
+  }, [mode]);
+
+  // ---- Gyroscope (mobile, granted) ----
+  useEffect(() => {
+    if (mode !== "gyro-active") return;
+
+    function onOrientation(e: DeviceOrientationEvent) {
+      const gamma = e.gamma; // left-right tilt, -90..90
+      if (gamma == null) return;
+
+      let norm: number;
+      if (Math.abs(gamma) < GYRO_DEADZONE) {
+        norm = 0.5;
+      } else {
+        const sign = Math.sign(gamma);
+        const abs = Math.min(Math.abs(gamma), GYRO_MAX_TILT);
+        const t = (abs - GYRO_DEADZONE) / (GYRO_MAX_TILT - GYRO_DEADZONE);
+        norm = 0.5 + sign * t * 0.5; // 0..1
+      }
+      // Inverted to match mouse: tilt right -> cream side grows
+      const inverted = 1 - norm;
+      setSplit(MIN_SPLIT + inverted * (MAX_SPLIT - MIN_SPLIT));
     }
 
-    el.addEventListener("mousemove", onMove);
-    el.addEventListener("touchmove", onTouch, { passive: true });
-    el.addEventListener("touchstart", onTouch, { passive: true });
+    window.addEventListener("deviceorientation", onOrientation);
+    return () => window.removeEventListener("deviceorientation", onOrientation);
+  }, [mode]);
+
+  // ---- Auto-rotate fallback ----
+  useEffect(() => {
+    if (mode !== "auto-rotate") return;
+
+    const targets = [30, 70];
+    let i = 0;
+    let raf = 0;
+    let target = targets[i];
+
+    const interval = window.setInterval(() => {
+      i = (i + 1) % targets.length;
+      target = targets[i];
+    }, AUTO_ROTATE_INTERVAL_MS);
+
+    function tick() {
+      setSplit((prev) => {
+        const next = prev + (target - prev) * 0.06;
+        return Math.abs(next - target) < 0.05 ? target : next;
+      });
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+
     return () => {
-      running = false;
-      cancelAnimationFrame(rafId.current);
-      el.removeEventListener("mousemove", onMove);
-      el.removeEventListener("touchmove", onTouch);
-      el.removeEventListener("touchstart", onTouch);
+      clearInterval(interval);
+      cancelAnimationFrame(raf);
     };
+  }, [mode]);
+
+  // ---- iOS permission request ----
+  const requestGyroPermission = useCallback(async () => {
+    try {
+      // @ts-expect-error — non-standard iOS API
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res === "granted") {
+        setMode("gyro-active");
+      } else {
+        setMode("auto-rotate");
+      }
+    } catch {
+      setMode("auto-rotate");
+    }
   }, []);
 
-  const splitVar = `${DEFAULT_SPLIT}%`; // initial value only, rAF overrides via DOM
+  const leftDominant = split >= 50;
 
   return (
     <section
       id="home"
       ref={ref}
-      className="relative min-h-[100svh] overflow-hidden pt-16 select-none touch-none"
-      style={{ ["--split" as string]: splitVar }}
-      aria-label="Hero section — move mouse or drag to switch between Fullstack Dev and ML Engineer"
+      className="relative min-h-[100svh] overflow-hidden select-none"
+      style={{ ["--split" as string]: `${split}%` }}
+      aria-label="Hero — interactive split between Fullstack Dev and ML Engineer"
     >
-      {/* LEFT half — fullstack (cream) */}
       <SideLayer
         role={ROLES.left}
         clipPath={`polygon(0 0, var(--split) 0, var(--split) 100%, 0 100%)`}
-        active={leftDominant}
         position="left"
       />
-
-      {/* RIGHT half — ML (navy) */}
       <SideLayer
         role={ROLES.right}
         clipPath={`polygon(var(--split) 0, 100% 0, 100% 100%, var(--split) 100%)`}
-        active={!leftDominant}
         position="right"
       />
 
       {/* Center divider */}
       <div
-        className="absolute top-16 bottom-0 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent pointer-events-none hero-side-transition"
+        className="absolute top-16 bottom-24 sm:bottom-20 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent pointer-events-none"
         style={{ left: `var(--split)`, transform: "translateX(-50%)" }}
       />
 
-      {/* Bottom hint */}
+      {/* Bottom hint + iOS permission button */}
       <div
         className={cn(
-          "absolute bottom-5 inset-x-0 flex items-center justify-center gap-2 text-[10px] tracking-[0.24em] font-medium uppercase pointer-events-none transition-colors duration-500 z-20",
+          "absolute bottom-5 inset-x-0 flex items-center justify-center gap-2 text-[10px] tracking-[0.24em] font-medium uppercase transition-colors duration-500 z-20",
           leftDominant ? "text-navy/50" : "text-white/40"
         )}
       >
-        <span className="h-px w-6 sm:w-8 bg-current opacity-50" />
-        <span className="hidden sm:inline">Move your mouse</span>
-        <span className="sm:hidden">Drag to switch</span>
-        <span className="h-px w-6 sm:w-8 bg-current opacity-50" />
+        {mode === "gyro-pending" ? (
+          <button
+            type="button"
+            onClick={requestGyroPermission}
+            className={cn(
+              "pointer-events-auto inline-flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm cursor-pointer transition-colors",
+              leftDominant
+                ? "border-navy/20 bg-white/30 text-navy/80 hover:bg-white/50"
+                : "border-white/15 bg-white/[0.04] text-white/80 hover:bg-white/10"
+            )}
+            aria-label="Enable device tilt control"
+          >
+            <Smartphone className="h-3.5 w-3.5" />
+            Tap to enable tilt
+          </button>
+        ) : (
+          <div className="pointer-events-none flex items-center gap-2">
+            <span className="h-px w-6 sm:w-8 bg-current opacity-50" />
+            <span>
+              {mode === "desktop" && "Move your mouse"}
+              {mode === "gyro-active" && "Tilt your phone"}
+              {mode === "auto-rotate" && "Auto-switching"}
+              {mode === "static" && "—"}
+              {mode === "unknown" && ""}
+            </span>
+            <span className="h-px w-6 sm:w-8 bg-current opacity-50" />
+          </div>
+        )}
       </div>
-
-      {/* Initial nudge animation for first-time users */}
-      {!hasInteraction && (
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 h-1 w-12 rounded-full bg-white/15 overflow-hidden z-20 pointer-events-none">
-          <div className="h-full w-1/3 bg-white/60 rounded-full anim-nudge" />
-        </div>
-      )}
     </section>
   );
 }
@@ -181,42 +259,35 @@ export function Hero() {
 function SideLayer({
   role,
   clipPath,
-  active,
   position,
 }: {
   role: RoleData;
   clipPath: string;
-  active: boolean;
   position: "left" | "right";
 }) {
   return (
-    <div
-      className="absolute inset-0 hero-side-transition"
-      style={{ clipPath }}
-    >
+    <div className="absolute inset-0 hero-side-transition" style={{ clipPath }}>
       <div className={cn("absolute inset-0", role.bgClass)} />
 
-      {/* Decorations — kept inside each half, only on md+ */}
       {position === "left" ? <CreamDecorations /> : <NavyDecorations />}
 
-      {/* Centered content — same position in both layers so they overlap perfectly */}
-      <div className="absolute inset-0 pt-16 flex items-center justify-center px-4 sm:px-6">
+      {/* Centered content — pt-16 navbar offset, pb-24 hint area => true visual center */}
+      <div className="absolute inset-0 pt-16 pb-24 sm:pb-20 flex items-center justify-center px-5 sm:px-6">
         <div className="w-full max-w-4xl flex flex-col items-center text-center">
           <div
             className={cn(
-              "inline-flex items-center gap-2 text-[10px] sm:text-xs font-semibold tracking-[0.22em] uppercase mb-5 sm:mb-6 transition-opacity duration-300",
-              role.accentClass,
-              !active && "opacity-90"
+              "inline-flex items-center gap-2 text-[10px] sm:text-xs font-semibold tracking-[0.2em] sm:tracking-[0.22em] uppercase mb-4 sm:mb-6",
+              role.accentClass
             )}
           >
-            <Sparkles className="h-3.5 w-3.5" />
+            <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             {role.eyebrow}
           </div>
 
           <h1
             className={cn(
               "font-display font-black uppercase tracking-[-0.02em] leading-[0.95] whitespace-nowrap",
-              "text-[clamp(2rem,8vw,5.5rem)]",
+              "text-[clamp(1.875rem,9vw,5.5rem)]",
               role.textClass
             )}
           >
@@ -225,7 +296,7 @@ function SideLayer({
 
           <p
             className={cn(
-              "mt-5 sm:mt-6 text-sm sm:text-base md:text-lg max-w-md sm:max-w-xl text-balance leading-relaxed px-2",
+              "mt-4 sm:mt-6 text-[13px] sm:text-base md:text-lg max-w-md sm:max-w-xl text-balance leading-relaxed",
               role.subtitleClass
             )}
           >
@@ -239,11 +310,10 @@ function SideLayer({
           <a
             href="#projects"
             className={cn(
-              "mt-7 sm:mt-8 inline-flex items-center gap-2 h-10 sm:h-11 px-6 sm:px-7 rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase cursor-pointer transition-transform hover:scale-[1.03] pointer-events-auto",
+              "mt-6 sm:mt-8 inline-flex items-center gap-2 h-10 sm:h-11 px-6 sm:px-7 rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase cursor-pointer transition-transform hover:scale-[1.03]",
               role.ctaClass
             )}
             aria-label={role.ctaLabel}
-            tabIndex={active ? 0 : -1}
           >
             {role.ctaLabel}
             <ArrowRight className="h-4 w-4" />
@@ -258,7 +328,6 @@ function SideLayer({
 function CreamDecorations() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none hidden md:block">
-      {/* Top-left: code card */}
       <div className="absolute left-[6%] top-[18%] anim-float-y">
         <div className="px-5 py-4 rounded-2xl border border-navy/10 bg-white/40 backdrop-blur-sm shadow-sm font-mono text-navy/60">
           <div className="text-xs">
@@ -271,7 +340,6 @@ function CreamDecorations() {
         </div>
       </div>
 
-      {/* Mid-left: orbit */}
       <div className="absolute left-[10%] top-[58%] anim-float-x">
         <div className="relative h-20 w-20 grid place-items-center">
           <div className="absolute inset-0 anim-spin-slow">
@@ -283,7 +351,6 @@ function CreamDecorations() {
         </div>
       </div>
 
-      {/* Bottom-left: grid */}
       <div className="absolute left-[8%] bottom-[16%] anim-drift">
         <div className="grid grid-cols-3 gap-1.5">
           {Array.from({ length: 9 }).map((_, i) => (
@@ -296,7 +363,6 @@ function CreamDecorations() {
         </div>
       </div>
 
-      {/* Top-center small badge */}
       <div className="absolute left-[22%] top-[12%] anim-float-y" style={{ animationDelay: "1s" }}>
         <div className="px-3 py-1.5 rounded-full border border-navy/10 bg-white/40 backdrop-blur-sm text-[10px] font-mono text-navy/50 tracking-wider">
           &lt;component /&gt;
